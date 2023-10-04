@@ -2,9 +2,14 @@
   "name": "@raprincis/service-broker",
   "version": "1.0.0",
   "description": "Osb api broker",
-  "main": "index.js",
-  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/raprins/service-broker.git"
+  },
+  "main": "build/index.js",
+  "module": "build/esm/index.js",
   "types": "build/index.d.ts",
+  "type": "module",
   "scripts": {
     "dev": "nodemon",
     "build": "tsup ./src"
