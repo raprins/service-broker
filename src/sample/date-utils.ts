@@ -1,6 +1,6 @@
 
 import { Request, Response, Router } from "express";
-import { CreateProvisioning, Operation, OsbService, OsbServicePlanKey, ProvisionRequest, Provision, UpdateProvisioning, Binding, BindingRequest, CreateBinding, OperationRequest } from "../lib/service.js";
+import { CreateProvisioning, Operation, OsbService, ProvisionRequest, Provision, UpdateProvisioning, Binding, BindingRequest, CreateBinding, OperationRequest } from "../lib/service.js";
 
 class DateUtilService extends OsbService {
 

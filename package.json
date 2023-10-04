@@ -1,5 +1,5 @@
 {
-  "name": "broker",
+  "name": "@raprincis/service-broker",
   "version": "1.0.0",
   "description": "Osb api broker",
   "main": "index.js",
