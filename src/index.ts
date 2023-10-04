@@ -1,9 +1,14 @@
-import * as Service from "./lib/service.js"
-import * as Error from "./lib/error.js"
-import * as Broker from "./lib/broker.js"
+import {
+    Binding, BindingMetadata, BindingRequest, CreateBinding, CreateProvisioning, JSONSchema, Operation, OperationRequest, OperationType,
+    OsbDashboardClient, OsbMaintenanceInfo, OsbPlan, OsbPlanCost, OsbPlanMetadata, OsbSchema, OsbService, OsbServiceCatalog, OsbServiceConfiguration, OsbServiceMetadata,
+    OsbServicePlanKey, OsbServiceProxy, PromiseOrNot, Provision, ProvisionRequest, SchemaParameters, UpdateProvisioning
+} from "./lib/service.js"
+import { BrokerErrorJson, BrokerErrorType, parseError } from "./lib/error.js"
+import { AsyncRequest, ProvisionParam, OsbApiBroker } from "./lib/broker.js"
 
 export {
-    Service,
-    Error,
-    Broker
+    BrokerErrorJson, BrokerErrorType, parseError, AsyncRequest, ProvisionParam, OsbApiBroker,
+    Binding, BindingMetadata, BindingRequest, CreateBinding, CreateProvisioning, JSONSchema, Operation, OperationRequest, OperationType,
+    OsbDashboardClient, OsbMaintenanceInfo, OsbPlan, OsbPlanCost, OsbPlanMetadata, OsbSchema, OsbService, OsbServiceCatalog, OsbServiceConfiguration, OsbServiceMetadata,
+    OsbServicePlanKey, OsbServiceProxy, PromiseOrNot, Provision, ProvisionRequest, SchemaParameters, UpdateProvisioning
 }

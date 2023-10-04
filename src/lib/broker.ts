@@ -22,7 +22,7 @@ export type ProvisionParam = {
 
 
 
-export default class OsbApiBroker {
+export class OsbApiBroker {
 
     private _managedService: Map<string, OsbService> = new Map()
 
