@@ -1,4 +1,4 @@
-import { Binding, BindingRequest, CreateBinding, CreateProvisioning, Operation, OperationRequest, OsbApiBroker, OsbService, OsbServiceConfiguration, PromiseOrNot, Provision, ProvisionRequest, UpdateProvisioning } from "../index.js"
+import { Binding, BindingRequest, CreateBinding, CreateProvisioning, Operation, OperationRequest, OsbApiBroker, OsbServiceConfiguration, PromiseOrNot, Provision, ProvisionRequest, UpdateProvisioning, OsbService } from "../index.js"
 import express from "express"
 import DefaultServiceAdapter from "../lib/default-adapter.js";
 import BrokerError from "../lib/error.js";
@@ -6,43 +6,29 @@ import BrokerError from "../lib/error.js";
 const PORT = Number(process.env.PORT || '3000')
 const app = express()
 
-class DateService extends OsbService {
+const dateService = new OsbService({
+  id: 'fbb89e27-8b39-4aa4-b00a-415326185ea9',
+  name: 'date-utilities',
+  description: "Date",
+  bindable: true,
+  plans: [{
+    id: 'd226e953-dcd6-4bf8-aa63-12ba196b7fb1',
+    name: 'free-plan',
+    description: 'A free plan',
+    free: true
+  }]
+})
 
 
-  async provision(request: ProvisionRequest<CreateProvisioning<{ firstname: string }>>): Promise<Provision> {
-    throw new Error("Method not implemented.");
-  }
-  
-  deprovision(request: ProvisionRequest<Record<string, any>>): PromiseOrNot<void> {
-    throw new Error("Method not implemented.");
-  }
-  fetchInstance(request: ProvisionRequest<Record<string, any>>): PromiseOrNot<Provision> {
-    throw new Error("Method not implemented.");
-  }
-  updateInstance(request: ProvisionRequest<UpdateProvisioning>): PromiseOrNot<Provision> {
-    throw new Error("Method not implemented.");
-  }
-  getInstanceLastOperation(request: ProvisionRequest<OperationRequest>): PromiseOrNot<Operation> {
-    throw new Error("Method not implemented.");
-  }
-  bindInstance(request: BindingRequest<CreateBinding<Record<string, any>>>): PromiseOrNot<Binding<Record<string, any>>> {
-    throw new Error("Method not implemented.");
-  }
-  unbindInstance(request: BindingRequest<Record<string, any>>): PromiseOrNot<void> {
-    throw new Error("Method not implemented.");
-  }
-  fetchBinding(request: BindingRequest<Record<string, any>>): PromiseOrNot<Binding<Record<string, any>>> {
-    throw new Error("Method not implemented.");
-  }
-  getBindingLastOperation(request: BindingRequest<OperationRequest>): PromiseOrNot<Operation> {
-    throw new Error("Method not implemented.");
-  }
-}
+const broker = OsbApiBroker.create(dateService)
 
 
+app
+  .use('/broker', broker.handler)
+  .listen(PORT, () => console.log(`Server is runing on ${PORT}`))
 
 
-export const dateService = new DateService({
+const t = {
   "name": "fake-service",
   "id": "fbb89e27-8b39-4aa4-b00a-415326185ea9",
   "description": "A fake service.",
@@ -107,12 +93,4 @@ export const dateService = new DateService({
       "description": "OS image update.\nExpect downtime."
     }
   }]
-})
-
-
-const broker = OsbApiBroker.create(dateService)
-
-
-app
-  .use('/broker', broker.handler)
-  .listen(PORT, () => console.log(`Server is runing on ${PORT}`))
+}

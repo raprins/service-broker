@@ -22,8 +22,8 @@ export type OsbServiceConfiguration = {
     allow_context_updates?: boolean
     metadata?: OsbServiceMetadata
     dashboard_client?: OsbDashboardClient
-    plan_updateable: boolean
-    plans: OsbPlan[]
+    plan_updateable?: boolean
+    plans: [OsbPlan, ...OsbPlan[]]
 }
 
 export type OsbServiceMetadata = {
@@ -234,7 +234,7 @@ export type PromiseOrNot<T> = T | Promise<T>
 /**
  * Define a Service in Cloud
  */
-export abstract class OsbService {
+abstract class OsbAbstractService {
 
 
     private _configuration?:OsbServiceConfiguration
@@ -323,7 +323,7 @@ export abstract class OsbService {
 /**
  * Define Proxy Structure
  */
-export abstract class OsbServiceAdapter extends OsbService {
+export abstract class OsbServiceAdapter extends OsbAbstractService {
     constructor(protected managedService: OsbService) {
         super(managedService.configuration)
     }
@@ -334,4 +334,51 @@ export abstract class OsbServiceAdapter extends OsbService {
  */
 export interface OsbServiceAdapterConstructor {
     new(managedService: OsbService): OsbServiceAdapter
+}
+
+/**
+ * Define a Standard OsbService with the minimum implementation
+ */
+export class OsbService extends OsbAbstractService {
+
+    provision(request: ProvisionRequest<CreateProvisioning>): Provision {
+        return {}
+    }
+
+    deprovision(request: ProvisionRequest) {
+        
+    }
+
+    fetchInstance(request: ProvisionRequest): Provision {
+        return {}
+    }
+
+    updateInstance(request: ProvisionRequest<UpdateProvisioning>): Provision {
+        return {}
+    }
+
+    getInstanceLastOperation(request: ProvisionRequest<OperationRequest>): Operation {
+        return {
+            state: "succeeded"
+        }
+    }
+
+    bindInstance(request: BindingRequest<CreateBinding>): Binding {
+        return {}
+    }
+
+    unbindInstance(request: BindingRequest): void {
+        
+    }
+
+    fetchBinding(request: BindingRequest): Binding {
+        return {}
+    }
+
+    getBindingLastOperation(request: BindingRequest<OperationRequest>): Operation {
+        return {
+            state: "succeeded"
+        }
+    }
+    
 }

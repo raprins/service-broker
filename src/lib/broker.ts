@@ -28,12 +28,12 @@ export type BindingParam = ProvisionParam & {
 
 export class OsbApiBroker {
 
-    private _managedService: Map<string, OsbService> = new Map()
+    private _managedService: Map<string, OsbServiceAdapter> = new Map()
 
 
     private constructor() { }
 
-    static create(services: OsbService | [OsbService, ...OsbService[]]): OsbApiBroker {
+    static create(services: OsbService | OsbService[]): OsbApiBroker {
 
         const _broker = new OsbApiBroker()
 
@@ -42,7 +42,8 @@ export class OsbApiBroker {
         return _broker
     }
 
-    private getService(service_id: string): OsbService {
+    
+    private getDedicatedService(service_id: string): OsbServiceAdapter {
         const service = this._managedService.get(service_id)
         if (!service) throw BrokerError.NotFound(`Service ${service_id} not found`)
         return service
@@ -91,7 +92,7 @@ export class OsbApiBroker {
         let result: Provision | BrokerErrorJson;
         try {
 
-            result = await this.getService(body.service_id)
+            result = await this.getDedicatedService(body.service_id)
                 .provision({ ...params, ...body, ...query })
 
             status = (result.operation && result.operation.length > 0) ? 202 : 201
@@ -107,7 +108,7 @@ export class OsbApiBroker {
     private _deprovision = async (request: Request<ProvisionParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response<{} | BrokerErrorJson>) => {
         try {
             const { params, query } = request
-            const service = this.getService(query.service_id)
+            const service = this.getDedicatedService(query.service_id)
             await service.deprovision({ ...params, ...query })
             response.json({})
         } catch (error) {
@@ -118,7 +119,7 @@ export class OsbApiBroker {
     private _fetchInstance = async (request: Request<ProvisionParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response<Provision | BrokerErrorJson>) => {
         try {
             const { params, query } = request
-            const service = this.getService(query.service_id)
+            const service = this.getDedicatedService(query.service_id)
             response.status(200).json(await service.fetchInstance({ ...params, ...query }))
         } catch (error) {
             response.status(400).json(parseError(error))
@@ -128,7 +129,7 @@ export class OsbApiBroker {
     private _getInstanceLastOperation = async (request: Request<ProvisionParam, any, any, OperationRequest & OsbServicePlanKey>, response: Response<Operation | BrokerErrorJson>) => {
         try {
             const { params, query } = request
-            response.status(200).json(await this.getService(query.service_id).getInstanceLastOperation({ ...params, ...query }))
+            response.status(200).json(await this.getDedicatedService(query.service_id).getInstanceLastOperation({ ...params, ...query }))
         } catch (error) {
             response.status(400).json(parseError(error))
         }
@@ -138,7 +139,7 @@ export class OsbApiBroker {
         const { body, params, query } = request
         try {
 
-            const service = this.getService(body.service_id)
+            const service = this.getDedicatedService(body.service_id)
             const result = await service.bindInstance({
                 ...params,
                 ...body,
@@ -154,7 +155,7 @@ export class OsbApiBroker {
         const { params, query } = request
         try {
 
-            const service = this.getService(query.service_id)
+            const service = this.getDedicatedService(query.service_id)
             const result = await service.unbindInstance({
                 ...params,
                 ...query
@@ -168,7 +169,7 @@ export class OsbApiBroker {
     private _getBindingLastOperation = async (request: Request<BindingParam, any, any, OperationRequest & OsbServicePlanKey>, response: Response<Operation | BrokerErrorJson>) => {
         try {
             const { params, query } = request
-            response.status(200).json(await this.getService(query.service_id).getBindingLastOperation({ ...params, ...query }))
+            response.status(200).json(await this.getDedicatedService(query.service_id).getBindingLastOperation({ ...params, ...query }))
         } catch (error) {
             response.status(400).json(parseError(error))
         }

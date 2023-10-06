@@ -1,7 +1,7 @@
 
 import Ajv, { ValidateFunction } from "ajv"
 import BrokerError from "./error.js";
-import { ProvisionRequest, CreateProvisioning, UpdateProvisioning, Provision, Operation, CreateBinding, BindingRequest, Binding, OperationRequest, OsbPlan, OsbService, OsbServiceAdapter } from "./service.js";
+import { ProvisionRequest, CreateProvisioning, UpdateProvisioning, Provision, Operation, CreateBinding, BindingRequest, Binding, OperationRequest, OsbPlan, OsbServiceAdapter, OsbService } from "./service.js";
 
 // Get Ajv instance
 const _ajv = new Ajv.default({

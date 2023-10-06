@@ -2,12 +2,25 @@
 
 ## Initialize a Service broker
 
-Inherit Osb Service
-
 ```ts
- class DateUtilService extends OsbService { ... }
+// Instantiate a Class of OsbService
+const dateService = new OsbService({
+  id: '123345',
+  name: 'date-utilities',
+  description: "Date",
+  bindable: true,
+  plans: [{
+    id: '678901',
+    name: 'free-plan',
+    description: 'A free plan',
+    free: true
+  }]
+})
 
- // Somewhere in the code
-
+// Create a Broker with this Service 
+const broker = OsbApiBroker.create(dateService)
 ```
+
+
+
 
