@@ -182,7 +182,7 @@ export class OsbApiBroker {
                 ...params,
                 ...query
             })
-            response.status(201).json(result)
+            response.status(200).json(result)
         } catch (error) {
             response.status(400).json(parseError(error))
         }
