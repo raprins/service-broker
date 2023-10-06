@@ -203,6 +203,8 @@ export type Binding<Credential = Record<string, any>> = {
      */
     route_service_url?: string
     parameters?: Record<string, any>
+    /** MUST be returned if the binding is in progress. The operation string MUST match that returned for the original request. */
+    operation?: string
 }
 
 export type BindingMetadata = {
@@ -268,11 +270,16 @@ abstract class OsbAbstractService {
      * When the Service Broker receives a provision request from the Platform, it MUST take whatever action is necessary to create a new resource.
      * What provisioning represents varies by Service Offering and Service Plan, although there are several common use cases.
      * For asynchronous responses, Service Brokers MUST return an identifier representing the operation.
+     * @param request Provisioning Request
+     * @returns Provision Data
      * @link https://github.com/openservicebrokerapi/servicebroker/blob/master/spec.md#provisioning
      */
     abstract provision(request: ProvisionRequest<CreateProvisioning>): PromiseOrNot<Provision>;
 
     /**
+     * When a Service Broker receives a deprovision request from a Platform, it MUST delete any resources it created during the provision. 
+     * Usually this means that all resources are immediately reclaimed for future provisions.
+     * @param request Provisioning Request
      * @link https://github.com/openservicebrokerapi/servicebroker/blob/master/spec.md#deprovisioning
      */
     abstract deprovision(request: ProvisionRequest): PromiseOrNot<void>;

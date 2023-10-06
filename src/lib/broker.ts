@@ -23,7 +23,10 @@ export type BindingParam = ProvisionParam & {
     binding_id: string
 }
 
-
+type ResponseEntity<T = Record<string, any>> = {
+    status: number,
+    data: T
+}
 
 
 export class OsbApiBroker {
@@ -42,7 +45,7 @@ export class OsbApiBroker {
         return _broker
     }
 
-    
+
     private getDedicatedService(service_id: string): OsbServiceAdapter {
         const service = this._managedService.get(service_id)
         if (!service) throw BrokerError.NotFound(`Service ${service_id} not found`)
@@ -83,26 +86,36 @@ export class OsbApiBroker {
                 API ROUTES
     ----------------------------------------------------------------------------------------------- */
     private _catalog = (request: Request, response: Response<OsbServiceCatalog>) => {
-        response.json({ services: Array.from(this._managedService.values()).map(service => service.configuration) })
+        const result: ResponseEntity<OsbServiceCatalog> = {
+            status: 200,
+            data: { services: Array.from(this._managedService.values()).map(service => service.configuration) }
+        }
+        response.status(result.status).json(result.data)
     }
 
     private _provision = async (request: Request<ProvisionParam, any, CreateProvisioning, AsyncRequest>, response: Response<Provision | BrokerErrorJson>) => {
-        const { body, params, query } = request
-        let status = 200
-        let result: Provision | BrokerErrorJson;
-        try {
-
-            result = await this.getDedicatedService(body.service_id)
-                .provision({ ...params, ...body, ...query })
-
-            status = (result.operation && result.operation.length > 0) ? 202 : 201
-
-        } catch (error) {
-            result = parseError(error)
-            status = 400
+       
+        let result: ResponseEntity<Provision | BrokerErrorJson> = {
+            status: 200,
+            data: {}
         }
 
-        response.status(status).json(result)
+        try {
+            result.data = await this.getDedicatedService(request.body.service_id)
+                .provision({ ...request.params, ...request.body, ...request.query })
+
+            result.status = (result.data.operation && result.data.operation.length > 0) ? 202 : 201
+
+        } catch (error) {
+
+            result = {
+                data: parseError(error),
+                status: 400
+            }
+
+        }
+
+        response.status(result.status).json(result.data)
     }
 
     private _deprovision = async (request: Request<ProvisionParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response<{} | BrokerErrorJson>) => {
@@ -137,6 +150,8 @@ export class OsbApiBroker {
 
     private _bindInstance = async (request: Request<BindingParam, any, CreateBinding, AsyncRequest>, response: Response) => {
         const { body, params, query } = request
+
+
         try {
 
             const service = this.getDedicatedService(body.service_id)
@@ -175,6 +190,9 @@ export class OsbApiBroker {
         }
     }
 }
+
+
+
 
 
 
