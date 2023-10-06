@@ -1,3 +1,4 @@
+
 export type OsbServiceCatalog = {
     services: OsbServiceConfiguration[]
 }
@@ -115,14 +116,17 @@ export type ProvisionRequest<Data = Record<string, any>> = OsbServicePlanKey & D
      * */
     instance_id: string
     /** A value of true indicates that the Platform and its clients support asynchronous Service Broker operations. 
-     * If this parameter is not included in the request, and the Service Broker can only provision a Service Instance of the requested Service Plan asynchronously, the Service Broker MUST reject the request with a 422 Unprocessable Entity as described below. */
+     * If this parameter is not included in the request, and the Service Broker 
+     * can only provision a Service Instance of the requested Service Plan asynchronously, 
+     * the Service Broker MUST reject the request with a 422 Unprocessable Entity as described below. 
+     * */
     accepts_incomplete?: boolean
 }
 
 
 
 
-export type CreateProvisioning = OsbServicePlanKey & {
+export type CreateProvisioning<Meta = Record<string, any>> = OsbServicePlanKey & {
     /** Contextual data for the Service Instance. */
     context?: Record<string, any>
     organization_guid?: string
@@ -131,7 +135,7 @@ export type CreateProvisioning = OsbServicePlanKey & {
      * Configuration parameters for the Service Instance.
      * Service Brokers SHOULD ensure that the client has provided valid configuration parameters and values for the operation. 
      * */
-    parameters?: Record<string, any>
+    parameters?: Meta
     maintenance_info?: OsbMaintenanceInfo
 }
 
@@ -153,7 +157,7 @@ export type OperationRequest = {
      * When a value for operation is included with asynchronous responses for Provision, Update, and Deprovision requests, the Platform MUST provide the same value using this query parameter as a percent-encoded string.
      * If present, MUST be a non-empty string.
      */
-    operation?: string
+    operation: string
 }
 
 /**
@@ -161,6 +165,12 @@ export type OperationRequest = {
  */
 export type Provision = {
     dashboard_url?: string
+    /**
+     * For asynchronous responses, Service Brokers MAY return an identifier representing the operation.
+     * The value of this field MUST be provided by the Platform with requests to the Polling Last Operation 
+     * for Service Instances endpoint in a percent-encoded query parameter.
+     * If present, MAY be null, and MUST NOT contain more than 10,000 characters.
+     */
     operation?: string
     /** @link https://github.com/openservicebrokerapi/servicebroker/blob/master/spec.md#service-instance-metadata */
     metadata?: {
@@ -187,6 +197,10 @@ export type Binding<Credential = Record<string, any>> = {
     metadata?: BindingMetadata
     credentials?: Credential
     syslog_drain_url?: string
+    /**
+     * Route services are a class of Service Offerings that intermediate requests to applications, performing functions such as rate limiting or authorization.
+     * To indicate support for route services, the catalog entry for the Service MUST include the "requires":["route_forwarding"] property.
+     */
     route_service_url?: string
     parameters?: Record<string, any>
 }
@@ -222,14 +236,38 @@ export type PromiseOrNot<T> = T | Promise<T>
  */
 export abstract class OsbService {
 
+
+    private _configuration?:OsbServiceConfiguration
+
     /**
      * 
      * @param configuration : Osb Api Service Configuration
      */
-    constructor(public configuration: OsbServiceConfiguration) { };
+    constructor(configuration: OsbServiceConfiguration) { 
+        this.configuration = configuration
+    };
 
+    set configuration (configuration: OsbServiceConfiguration) {
+        this.checkConfiguration(configuration)
+        this._configuration = configuration
+    }
+
+    get configuration () {
+        return this._configuration!
+    }
 
     /**
+     * Check Configuration
+     * @param configuration 
+     */
+    checkConfiguration(configuration: OsbServiceConfiguration):void {
+        /** Add Checks ... */
+    }
+
+    /**
+     * When the Service Broker receives a provision request from the Platform, it MUST take whatever action is necessary to create a new resource.
+     * What provisioning represents varies by Service Offering and Service Plan, although there are several common use cases.
+     * For asynchronous responses, Service Brokers MUST return an identifier representing the operation.
      * @link https://github.com/openservicebrokerapi/servicebroker/blob/master/spec.md#provisioning
      */
     abstract provision(request: ProvisionRequest<CreateProvisioning>): PromiseOrNot<Provision>;
@@ -240,6 +278,11 @@ export abstract class OsbService {
     abstract deprovision(request: ProvisionRequest): PromiseOrNot<void>;
 
     /**
+     * If "instances_retrievable" :true is declared for a Service Offering in the Catalog endpoint,
+     * Service Brokers MUST support this endpoint for all Service Plans of the Service Offering and 
+     * this endpoint MUST be available immediately after the Polling Last Operation for Service Instances endpoint 
+     * returns "state": "succeeded" for a Provisioning operation. 
+     * Otherwise, Platforms SHOULD NOT attempt to call this endpoint under any circumstances.
      * @link https://github.com/openservicebrokerapi/servicebroker/blob/master/spec.md#fetching-a-service-instance
      */
     abstract fetchInstance(request: ProvisionRequest): PromiseOrNot<Provision>;
@@ -280,8 +323,15 @@ export abstract class OsbService {
 /**
  * Define Proxy Structure
  */
-export abstract class OsbServiceProxy extends OsbService {
+export abstract class OsbServiceAdapter extends OsbService {
     constructor(protected managedService: OsbService) {
         super(managedService.configuration)
     }
 } 
+
+/**
+ * Service Adapter Definition
+ */
+export interface OsbServiceAdapterConstructor {
+    new(managedService: OsbService): OsbServiceAdapter
+}

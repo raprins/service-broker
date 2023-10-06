@@ -1,6 +1,6 @@
 {
   "name": "@raprincis/service-broker",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "Osb api broker",
   "repository": {
     "type": "git",
@@ -12,21 +12,30 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon",
-    "build": "tsup ./src"
+    "build": "rimraf ./build & tsc"
   },
-  "files": ["build"],
-  "keywords": ["osbapi","cf", "cloud foundry"],
+  "files": [
+    "build"
+  ],
+  "keywords": [
+    "osbapi",
+    "cf",
+    "cloud foundry"
+  ],
   "author": "Princis RAKOTOMANGA",
   "private": false,
   "license": "MIT",
   "devDependencies": {
     "@types/express": "^4.17.18",
     "nodemon": "^3.0.1",
+    "rimraf": "^5.0.5",
     "ts-node": "^10.9.1",
-    "tsup": "^7.2.0",
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "ajv": "^8.12.0",
+    "express": "^4.18.2",
+    "jsonschema": "^1.4.1",
+    "zod": "^3.22.4"
   }
 }

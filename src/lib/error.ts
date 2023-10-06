@@ -1,10 +1,12 @@
 export enum BrokerErrorType {
     NotFound = "NotFound",
+    InvalidParameter = "InvalidParameter",
     AsyncRequired = "AsyncRequired",
     ConcurrencyError = "ConcurrencyError",
     RequiresApp = "RequiresApp",
     MaintenanceInfoConflict = "MaintenanceInfoConflict",
-    UnsupportedOperation = "UnsupportedRequest"
+    UnsupportedOperation = "UnsupportedRequest",
+    ConfigurationError = "ConfigurationError"
 }
 
 export type BrokerErrorJson = {
@@ -16,7 +18,7 @@ export type BrokerErrorJson = {
 
 export default class BrokerError extends Error {
 
-    constructor(protected code: BrokerErrorType, message?: string) {
+    constructor(public code: BrokerErrorType, message?: string) {
         super(message)
     }
 
@@ -48,6 +50,15 @@ export default class BrokerError extends Error {
         return new BrokerError(BrokerErrorType.UnsupportedOperation, message)
     }
 
+    static InvalidParameter(message: string = "Input Parameter is not okay"): BrokerError {
+        return new BrokerError(BrokerErrorType.InvalidParameter, message)
+    }
+
+    static ConfigurationError(message: string = "Configuration is Inconsistant"): BrokerError {
+        return new BrokerError(BrokerErrorType.ConfigurationError, message)
+    }
+
+
     get json(): BrokerErrorJson {
         return {
             error: this.code,
@@ -56,13 +67,12 @@ export default class BrokerError extends Error {
     }
 }
 
-
 export function parseError(error: any): BrokerErrorJson {
 
     if (error instanceof BrokerError) return error.json
 
     return {
-        error: 'Dummy',
+        error: 'StandardError',
         description: String(error)
     }
 
