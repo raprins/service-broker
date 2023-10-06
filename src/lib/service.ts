@@ -121,6 +121,13 @@ export type ProvisionRequest<Data = Record<string, any>> = OsbServicePlanKey & D
      * the Service Broker MUST reject the request with a 422 Unprocessable Entity as described below. 
      * */
     accepts_incomplete?: boolean
+
+    /*
+    context : {
+        apiVersion : string
+        originatingIdentity: string
+    }
+    */
 }
 
 

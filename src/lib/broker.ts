@@ -1,7 +1,8 @@
-import { Request, Response, Router, json } from "express"
+import { NextFunction, Request, Response, Router, json } from "express"
 import { CreateBinding, CreateProvisioning, Operation, OperationRequest, OsbService, OsbServiceAdapter, OsbServiceAdapterConstructor, OsbServiceCatalog, OsbServicePlanKey, Provision } from "./service.js"
 import DefaultServiceAdapter from "./default-adapter.js"
-import BrokerError, { BrokerErrorJson, parseError } from "./error.js";
+import BrokerError, { BrokerErrorJson, BrokerErrorType, parseError } from "./error.js";
+import { createHeaderSchema } from "./broker.validator.js";
 
 // Provisioning
 export type AsyncRequest = {
@@ -29,10 +30,12 @@ type ResponseEntity<T = Record<string, any>> = {
 }
 
 
+
+// const apiHeaderSchema = createHeaderSchema({ apiVersion: '2.17' })
+
 export class OsbApiBroker {
 
     private _managedService: Map<string, OsbServiceAdapter> = new Map()
-
 
     private constructor() { }
 
@@ -61,17 +64,14 @@ export class OsbApiBroker {
         return this
     }
 
-
-
-
     get handler() {
         const _router = Router()
         _router
             .use(json())
             /* ------------- PROVISION ----------------------------------------------------*/
             .get("/v2/catalog", this._catalog)
-            .put("/v2/service_instances/:instance_id", this._provision)
-            .delete("/v2/service_instances/:instance_id", this._deprovision)
+            .put("/v2/service_instances/:instance_id", checkRequest, this._provision)
+            .delete("/v2/service_instances/:instance_id", checkRequest, this._deprovision)
             .get("/v2/service_instances/:instance_id", this._fetchInstance)
             .get("/v2/service_instances/:instance_id/last_operation", this._getInstanceLastOperation)
             /* ------------- BINDING -----------------------------------------------------*/
@@ -94,7 +94,7 @@ export class OsbApiBroker {
     }
 
     private _provision = async (request: Request<ProvisionParam, any, CreateProvisioning, AsyncRequest>, response: Response<Provision | BrokerErrorJson>) => {
-       
+
         let result: ResponseEntity<Provision | BrokerErrorJson> = {
             status: 200,
             data: {}
@@ -188,6 +188,19 @@ export class OsbApiBroker {
         } catch (error) {
             response.status(400).json(parseError(error))
         }
+    }
+}
+
+
+
+
+
+function checkRequest(request: Request<any, any, any, any>, response: Response<BrokerErrorJson>, next: NextFunction) {
+    try {
+        // apiHeaderSchema.parse(request.headers)
+        next()
+    } catch (error) {
+        response.status(400).json(parseError(error))
     }
 }
 

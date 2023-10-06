@@ -1,3 +1,5 @@
+import {z} from "zod"
+
 export enum BrokerErrorType {
     NotFound = "NotFound",
     InvalidParameter = "InvalidParameter",
@@ -71,9 +73,32 @@ export function parseError(error: any): BrokerErrorJson {
 
     if (error instanceof BrokerError) return error.json
 
+    if(error instanceof z.ZodError) return parseZodError(error)
+
     return {
         error: 'StandardError',
         description: String(error)
     }
 
+}
+
+
+function parseZodError(error: z.ZodError):BrokerErrorJson {
+
+
+    const byPath = error.issues.reduce<Map<string, string[]>>((result, issue) => {
+
+        issue.path.forEach(path => {
+            let storedMsg = result.get(path.toString()) ?? []
+            storedMsg.push(issue.message)
+            result.set(path.toString(), storedMsg)
+        })
+
+        return result
+    }, new Map())
+
+    return {
+        error: BrokerErrorType.InvalidParameter,
+        description : Array.from(byPath).map(([path, messages])=> `[${path}]: ${messages[0]}`).join(' - ')
+    }
 }

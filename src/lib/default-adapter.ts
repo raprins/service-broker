@@ -58,7 +58,6 @@ export default class DefaultServiceAdapter extends OsbServiceAdapter {
     }
 
     async bindInstance(request: BindingRequest<CreateBinding<Record<string, any>>>): Promise<Binding<Record<string, any>>> {
-
         const { bindable } = this.managedService.configuration
         if (!bindable) {
             throw BrokerError.UnsupportedOperation(`Could not retrieve instance bindable is false`)
