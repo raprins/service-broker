@@ -64,6 +64,13 @@ export class OsbApiBroker {
         return this
     }
 
+    /**
+     * Available Services
+     */
+    get services (): OsbService[] {
+        return Array.from(this._managedService.values()).map(adapter => adapter.managedService)
+    }
+
     get handler() {
         const _router = Router()
         _router

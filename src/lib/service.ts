@@ -238,14 +238,23 @@ export type CreateBinding<Param = Record<string, any>> = OsbServicePlanKey & {
     parameters?: Param
 }
 
+/** Utils type */
 export type PromiseOrNot<T> = T | Promise<T> 
+
+export type EventHandler<T extends any[]> = (...args: T) => void
+export type DefaultServiceEventMap = {
+    provision: [key: OsbServicePlanKey & { instance_id: string }],
+    deprovision: [key: OsbServicePlanKey & { instance_id: string }],
+    binding: [key: OsbServicePlanKey & { instance_id: string, binding_id: string }],
+    unbinding: [key: OsbServicePlanKey & { instance_id: string, binding_id: string }],
+}
 
 /**
  * Define a Service in Cloud
  */
-abstract class OsbAbstractService {
+abstract class OsbAbstractService<EventMap extends Record<string, any[]> = DefaultServiceEventMap> {
 
-
+    private _eventHandlers: { [K in keyof EventMap]?: Set<EventHandler<EventMap[K]>>} = {}
     private _configuration?:OsbServiceConfiguration
 
     /**
@@ -331,6 +340,24 @@ abstract class OsbAbstractService {
     * @link https://github.com/openservicebrokerapi/servicebroker/blob/master/spec.md#polling-last-operation-for-service-bindings
     */
     abstract getBindingLastOperation(request: BindingRequest<OperationRequest>): PromiseOrNot<Operation>;
+
+
+    /**
+     *  When event is raised
+     */
+    on<K extends keyof EventMap>(event: K, handler: EventHandler<EventMap[K]>) {
+        const eventHandler  = this._eventHandlers[event] ?? new Set()
+        eventHandler.add(handler)
+        this._eventHandlers[event] = eventHandler
+    }
+
+    /**
+     *  Raise an event
+     */
+    emit<K extends keyof EventMap>(event: K, ...args: EventMap[K]) {
+        const eventHandler  = this._eventHandlers[event] ?? new Set()
+        eventHandler.forEach(handler => handler(...args))
+    }
 }
 
 
@@ -338,7 +365,7 @@ abstract class OsbAbstractService {
  * Define Proxy Structure
  */
 export abstract class OsbServiceAdapter extends OsbAbstractService {
-    constructor(protected managedService: OsbService) {
+    constructor(public managedService: OsbService) {
         super(managedService.configuration)
     }
 } 
@@ -354,6 +381,7 @@ export interface OsbServiceAdapterConstructor {
  * Define a Standard OsbService with the minimum implementation
  */
 export class OsbService extends OsbAbstractService {
+
 
     provision(request: ProvisionRequest<CreateProvisioning>): Provision {
         return {}
@@ -382,7 +410,6 @@ export class OsbService extends OsbAbstractService {
     }
 
     unbindInstance(request: BindingRequest): void {
-        
     }
 
     fetchBinding(request: BindingRequest): Binding {
@@ -394,5 +421,7 @@ export class OsbService extends OsbAbstractService {
             state: "succeeded"
         }
     }
+
+
     
 }
