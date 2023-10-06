@@ -178,11 +178,11 @@ export class OsbApiBroker {
         try {
 
             const service = this.getDedicatedService(query.service_id)
-            const result = await service.unbindInstance({
+            await service.unbindInstance({
                 ...params,
                 ...query
             })
-            response.status(200).json(result)
+            response.status(200).json({})
         } catch (error) {
             response.status(400).json(parseError(error))
         }
