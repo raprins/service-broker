@@ -243,10 +243,10 @@ export type PromiseOrNot<T> = T | Promise<T>
 
 export type EventHandler<T extends any[]> = (...args: T) => void
 export type DefaultServiceEventMap = {
-    provision: [key: OsbServicePlanKey & { instance_id: string }],
-    deprovision: [key: OsbServicePlanKey & { instance_id: string }],
-    binding: [key: OsbServicePlanKey & { instance_id: string, binding_id: string }],
-    unbinding: [key: OsbServicePlanKey & { instance_id: string, binding_id: string }],
+    provisioned: [key: OsbServicePlanKey & { instance_id: string }],
+    deprovisioned: [key: OsbServicePlanKey & { instance_id: string }],
+    bounded: [key: OsbServicePlanKey & { instance_id: string, binding_id: string }],
+    unbounded: [key: OsbServicePlanKey & { instance_id: string, binding_id: string }],
 }
 
 /**
@@ -372,6 +372,7 @@ export abstract class OsbServiceAdapter extends OsbAbstractService {
 
 /**
  * Service Adapter Definition
+ * Initialize the Decorator Design Pattern for future Use
  */
 export interface OsbServiceAdapterConstructor {
     new(managedService: OsbService): OsbServiceAdapter
