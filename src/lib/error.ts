@@ -23,7 +23,7 @@ export type BrokerErrorJson = {
     update_repeatable?: boolean
 }
 
-export default class BrokerError extends Error {
+export class BrokerError extends Error {
 
     constructor(public code: BrokerErrorType, message?: string) {
         super(message)

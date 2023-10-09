@@ -1,6 +1,6 @@
 {
   "name": "@raprincis/service-broker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Osb api broker",
   "repository": {
     "type": "git",

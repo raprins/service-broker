@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response, Router, json } from "express"
 import { CreateBinding, CreateProvisioning, Operation, OperationRequest, OsbService, OsbServiceCatalog, OsbServiceConfiguration, OsbServicePlanKey, PlanId, Provision, ServiceId, InstanceId } from "./service.js"
-import BrokerError, { BrokerErrorJson, BrokerErrorType, parseError } from "./error.js";
+import { BrokerErrorJson, BrokerErrorType, parseError, BrokerError } from "./error.js";
 import { createRequestHeaderValidator } from "./validator.js";
 
 // Provisioning
@@ -84,8 +84,8 @@ export class OsbApiBroker {
         _router
             .use(json())
             .get("/v2/catalog", this.catalog)
-            /* ------------- PROVISION ----------------------------------------------------*/
-            .put("/v2/service_instances/:instance_id", requestValidator, this.provision) 
+            .use("/v2/service_instances", requestValidator, this.instanceRoute) 
+            .use("/v2/service_instances/:instance_id/service_bindings", requestValidator, this.bindingRoute) 
 
         return _router
     }
@@ -106,6 +106,22 @@ export class OsbApiBroker {
                 }
                 response.status(result.status).json(result.data)
         }
+    }
+
+    private get instanceRoute() {
+        return Router()
+            .put("/:instance_id", this.provision)
+            .get("/:instance_id", this.fetchServiceInstance)
+            .delete("/:instance_id", this.deprovision)
+            .get("/:instance_id/last_operation", this.instanceLastOperation)
+    }
+
+    private get bindingRoute() {
+        return Router()
+            .put("/:binding_id", this.bindInstance)
+            .get("/:binding_id", this.fetchBoundedInstance)
+            .delete("/:binding_id", this.unbindInstance)
+            .get("/:binding_id/last_operation", this.bindingLastOperation)
     }
 
 

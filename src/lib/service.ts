@@ -1,4 +1,4 @@
-import BrokerError from "./error.js"
+import {BrokerError} from "./error.js"
 import { Validator } from "jsonschema"
 import { ParameterValidator } from "./validator.js"
 
