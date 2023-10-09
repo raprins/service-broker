@@ -11,6 +11,8 @@ class DateService extends OsbService {
     }
 }
 
+
+
 const broker = Broker.create(new DateService({
     "name": "fake-service",
     "id": "fbb89e27-8b39-4aa4-b00a-415326185ea9",
@@ -78,6 +80,7 @@ const broker = Broker.create(new DateService({
     }]
   }))
 
+ 
 
 const PORT = Number(process.env.PORT || '3000')
 const app = express()

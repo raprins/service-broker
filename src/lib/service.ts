@@ -1,3 +1,6 @@
+import BrokerError from "./error.js"
+import { Validator } from "jsonschema"
+import { ParameterValidator } from "./validator.js"
 
 export type OsbServiceCatalog = {
     services: OsbServiceConfiguration[]
@@ -9,7 +12,7 @@ export type OsbServiceCatalog = {
  */
 export type OsbServiceConfiguration = {
     name: string
-    id: string
+    id: ServiceId
     description: string
     tags?: string[]
     requires?: string[]
@@ -99,9 +102,9 @@ export type OsbMaintenanceInfo = {
 
 export type OsbServicePlanKey = {
     /** MUST be the ID of a Service Offering from the catalog for this Service Broker. */
-    service_id: string
+    service_id: ServiceId
     /** MUST be the ID of a Service Plan from the Service Offering that has been requested. */
-    plan_id: string
+    plan_id: PlanId
 }
 
 
@@ -114,20 +117,13 @@ export type ProvisionRequest<Data = Record<string, any>> = OsbServicePlanKey & D
      * This ID will be used for future requests (bind and deprovision), 
      * so the Service Broker will use it to correlate the resource it creates. 
      * */
-    instance_id: string
+    instance_id: InstanceId
     /** A value of true indicates that the Platform and its clients support asynchronous Service Broker operations. 
      * If this parameter is not included in the request, and the Service Broker 
      * can only provision a Service Instance of the requested Service Plan asynchronously, 
      * the Service Broker MUST reject the request with a 422 Unprocessable Entity as described below. 
      * */
     accepts_incomplete?: boolean
-
-    /*
-    context : {
-        apiVersion : string
-        originatingIdentity: string
-    }
-    */
 }
 
 
@@ -239,38 +235,58 @@ export type CreateBinding<Param = Record<string, any>> = OsbServicePlanKey & {
 }
 
 /** Utils type */
-export type PromiseOrNot<T> = T | Promise<T> 
+export type PromiseOrNot<T> = T | Promise<T>
 
 export type EventHandler<T extends any[]> = (...args: T) => void
 export type DefaultServiceEventMap = {
-    provisioned: [key: OsbServicePlanKey & { instance_id: string }],
-    deprovisioned: [key: OsbServicePlanKey & { instance_id: string }],
-    bounded: [key: OsbServicePlanKey & { instance_id: string, binding_id: string }],
-    unbounded: [key: OsbServicePlanKey & { instance_id: string, binding_id: string }],
+    provisioned: [key: OsbServicePlanKey & { instance_id: InstanceId }],
+    deprovisioned: [key: OsbServicePlanKey & { instance_id: InstanceId }],
+    bounded: [key: OsbServicePlanKey & { instance_id: InstanceId, binding_id: BindingId }],
+    unbounded: [key: OsbServicePlanKey & { instance_id: InstanceId, binding_id: BindingId }],
 }
 
+
+/* -------------------------------------------------------------------------------------------- 
+    Operations : TYPE UTILITIES
+ -------------------------------------------------------------------------------------------- */
 /**
- * Define a Service in Cloud
+ * An identifier used to correlate this Service Offering in future requests to the Service Broker. 
+ * This MUST be globally unique such that Platforms (and their users) MUST be able to assume that seeing the same value (no matter what Service Broker uses it) will always refer to this Service Offering
+ */
+export type ServiceId = string
+/**
+ * An identifier used to correlate this Service Plan in future requests to the Service Broker. 
+ * This MUST be globally unique such that Platforms (and their users) MUST be able to assume that seeing the same value (no matter what Service Broker uses it) will always refer to this Service Plan and for the same Service Offering
+ */
+export type PlanId = string
+export type InstanceId = string
+export type BindingId = string
+
+
+
+/**
+ * Define a Backbone of Service in Cloud
  */
 abstract class OsbAbstractService<EventMap extends Record<string, any[]> = DefaultServiceEventMap> {
 
-    private _eventHandlers: { [K in keyof EventMap]?: Set<EventHandler<EventMap[K]>>} = {}
-    private _configuration?:OsbServiceConfiguration
+    private _eventHandlers: { [K in keyof EventMap]?: Set<EventHandler<EventMap[K]>> } = {}
+
+    private _configuration?: OsbServiceConfiguration
 
     /**
      * 
      * @param configuration : Osb Api Service Configuration
      */
-    constructor(configuration: OsbServiceConfiguration) { 
+    constructor(configuration: OsbServiceConfiguration) {
         this.configuration = configuration
     };
 
-    set configuration (configuration: OsbServiceConfiguration) {
+    set configuration(configuration: OsbServiceConfiguration) {
         this.checkConfiguration(configuration)
         this._configuration = configuration
     }
 
-    get configuration () {
+    get configuration() {
         return this._configuration!
     }
 
@@ -278,8 +294,17 @@ abstract class OsbAbstractService<EventMap extends Record<string, any[]> = Defau
      * Check Configuration
      * @param configuration 
      */
-    checkConfiguration(configuration: OsbServiceConfiguration):void {
-        /** Add Checks ... */
+    checkConfiguration(configuration: OsbServiceConfiguration): void {
+        /** Add Checks if needed... */
+    }
+
+    /**
+     * 
+     */
+    getPlan(id: PlanId) {
+        const plan = this.configuration.plans.find(plan => plan.id === id)
+        if (!plan) throw new BrokerError("NotFound", `Plan ${id} is not found`)
+        return plan
     }
 
     /**
@@ -346,7 +371,7 @@ abstract class OsbAbstractService<EventMap extends Record<string, any[]> = Defau
      *  When event is raised
      */
     on<K extends keyof EventMap>(event: K, handler: EventHandler<EventMap[K]>) {
-        const eventHandler  = this._eventHandlers[event] ?? new Set()
+        const eventHandler = this._eventHandlers[event] ?? new Set()
         eventHandler.add(handler)
         this._eventHandlers[event] = eventHandler
     }
@@ -355,74 +380,120 @@ abstract class OsbAbstractService<EventMap extends Record<string, any[]> = Defau
      *  Raise an event
      */
     emit<K extends keyof EventMap>(event: K, ...args: EventMap[K]) {
-        const eventHandler  = this._eventHandlers[event] ?? new Set()
+        const eventHandler = this._eventHandlers[event] ?? new Set()
         eventHandler.forEach(handler => handler(...args))
     }
-}
 
-
-/**
- * Define Proxy Structure
- */
-export abstract class OsbServiceAdapter extends OsbAbstractService {
-    constructor(public managedService: OsbService) {
-        super(managedService.configuration)
-    }
-} 
-
-/**
- * Service Adapter Definition
- * Initialize the Decorator Design Pattern for future Use
- */
-export interface OsbServiceAdapterConstructor {
-    new(managedService: OsbService): OsbServiceAdapter
 }
 
 /**
  * Define a Standard OsbService with the minimum implementation
  */
-export class OsbService extends OsbAbstractService {
+export class DefaultOsbService extends OsbAbstractService {
 
-
-    provision(request: ProvisionRequest<CreateProvisioning>): Provision {
+    provision(request: ProvisionRequest<CreateProvisioning>): PromiseOrNot<Provision> {
         return {}
     }
 
-    deprovision(request: ProvisionRequest) {
-        
+    deprovision(request: ProvisionRequest): PromiseOrNot<void> {
+
     }
 
-    fetchInstance(request: ProvisionRequest): Provision {
+    fetchInstance(request: ProvisionRequest): PromiseOrNot<Provision> {
         return {}
     }
 
-    updateInstance(request: ProvisionRequest<UpdateProvisioning>): Provision {
+    updateInstance(request: ProvisionRequest<UpdateProvisioning>): PromiseOrNot<Provision> {
         return {}
     }
 
-    getInstanceLastOperation(request: ProvisionRequest<OperationRequest>): Operation {
+    getInstanceLastOperation(request: ProvisionRequest<OperationRequest>): PromiseOrNot<Operation> {
         return {
             state: "succeeded"
         }
     }
 
-    bindInstance(request: BindingRequest<CreateBinding>): Binding {
+    bindInstance(request: BindingRequest<CreateBinding>): PromiseOrNot<Binding> {
         return {}
     }
 
-    unbindInstance(request: BindingRequest): void {
+    unbindInstance(request: BindingRequest): PromiseOrNot<void> {
     }
 
-    fetchBinding(request: BindingRequest): Binding {
+    fetchBinding(request: BindingRequest): PromiseOrNot<Binding> {
         return {}
     }
 
-    getBindingLastOperation(request: BindingRequest<OperationRequest>): Operation {
+    getBindingLastOperation(request: BindingRequest<OperationRequest>): PromiseOrNot<Operation> {
         return {
             state: "succeeded"
         }
     }
+}
 
 
-    
+type FlowValidator = {
+    createProvision?: ParameterValidator,
+    updateProvision?: ParameterValidator,
+    createBinding?: ParameterValidator,
+}
+
+/**
+ * The With Checks
+ */
+export class OsbService extends DefaultOsbService {
+    private _parametersValidators: Map<PlanId, FlowValidator> = new Map()
+
+
+    constructor(configuration: OsbServiceConfiguration) {
+        super(configuration)
+
+        this.createValidator()
+    }
+
+    provision(request: ProvisionRequest<CreateProvisioning<Record<string, any>>>): PromiseOrNot<Provision> {
+        const {plan_id, parameters} = request
+        this.validate("createProvision", plan_id, parameters)
+        return super.provision(request)
+    }
+
+    updateInstance(request: ProvisionRequest<UpdateProvisioning>): PromiseOrNot<Provision> {
+        const {plan_id, parameters} = request
+        this.validate("updateProvision", plan_id, parameters)
+        return super.updateInstance(request)
+    }
+
+    bindInstance(request: BindingRequest<CreateBinding<Record<string, any>>>): PromiseOrNot<Binding> {
+        const {plan_id, parameters} = request
+        this.validate("createBinding", plan_id, parameters)
+        return super.bindInstance(request)
+    }
+
+    protected validate<K extends keyof FlowValidator>(flow: K, planId: PlanId, inputParameter?: any) {
+        const planValidator = this._parametersValidators.get(planId)
+        planValidator && planValidator[flow]?.validate(inputParameter)
+    }
+
+    private createValidator() {
+        this.configuration.plans.forEach(plan => {
+            const paramValidator = this._parametersValidators.get(plan.id) ?? {}
+
+            const {schemas} = plan
+
+            if(schemas && schemas.service_instance && schemas.service_instance.create && schemas.service_instance.create.parameters) {
+                paramValidator.createProvision = new ParameterValidator(schemas.service_instance.create.parameters)
+            }
+
+            if(schemas && schemas.service_instance && schemas.service_instance.update && schemas.service_instance.update.parameters) {
+                paramValidator.updateProvision = new ParameterValidator(schemas.service_instance.update.parameters)
+            }
+
+            if(schemas && schemas.service_binding && schemas.service_binding.create && schemas.service_binding.create.parameters) {
+                paramValidator.createBinding = new ParameterValidator(schemas.service_binding.create.parameters)
+            }
+
+            this._parametersValidators.set(plan.id, paramValidator)
+        })
+    }
+
 }

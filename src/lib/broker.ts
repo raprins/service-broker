@@ -1,8 +1,7 @@
 import { NextFunction, Request, Response, Router, json } from "express"
-import { CreateBinding, CreateProvisioning, Operation, OperationRequest, OsbService, OsbServiceAdapter, OsbServiceAdapterConstructor, OsbServiceCatalog, OsbServicePlanKey, Provision } from "./service.js"
-import DefaultServiceAdapter from "./default-adapter.js"
+import { CreateBinding, CreateProvisioning, Operation, OperationRequest, OsbService, OsbServiceCatalog, OsbServiceConfiguration, OsbServicePlanKey, PlanId, Provision, ServiceId, InstanceId } from "./service.js"
 import BrokerError, { BrokerErrorJson, BrokerErrorType, parseError } from "./error.js";
-import { createHeaderSchema } from "./broker.validator.js";
+import { createRequestHeaderValidator } from "./validator.js";
 
 // Provisioning
 export type AsyncRequest = {
@@ -30,28 +29,34 @@ type ResponseEntity<T = Record<string, any>> = {
 }
 
 
-
 // const apiHeaderSchema = createHeaderSchema({ apiVersion: '2.17' })
+
+export type BrokerOptions = {
+    withAuthentication?: string
+}
+
+const API_VERSION = "2.15"
 
 export class OsbApiBroker {
 
-    private _managedService: Map<string, OsbServiceAdapter> = new Map()
+    private _managedService: Map<ServiceId, OsbService> = new Map()
 
-    private constructor() { }
+    private constructor(private options: BrokerOptions) { }
 
-    static create(services: OsbService | OsbService[]): OsbApiBroker {
+    static create({ withAuthentication, services }: BrokerOptions & { services:OsbService | OsbService[]}): OsbApiBroker {
 
-        const _broker = new OsbApiBroker()
+        const _broker = new OsbApiBroker({
+            withAuthentication
+        })
 
         const _services = Array.isArray(services) ? services : [services]
-        _services.map(service => _broker.registerService(service))
+        _services.map(service =>  _broker.registerService(service))
         return _broker
     }
 
-
-    private getDedicatedService(service_id: string): OsbServiceAdapter {
+    private getDedicatedService(service_id: ServiceId): OsbService {
         const service = this._managedService.get(service_id)
-        if (!service) throw BrokerError.NotFound(`Service ${service_id} not found`)
+        if (!service) throw new BrokerError("NotFound", `Service ${service_id} not found`)
         return service
     }
 
@@ -60,31 +65,27 @@ export class OsbApiBroker {
      * @param service 
      */
     registerService(service: OsbService) {
-        this._managedService.set(service.configuration.id, new DefaultServiceAdapter(service))
+        this._managedService.set(service.configuration.id, service)
         return this
     }
 
     /**
      * Available Services
      */
-    get services (): OsbService[] {
-        return Array.from(this._managedService.values()).map(adapter => adapter.managedService)
+    get services(): OsbService[] {
+        return Array.from(this._managedService.values()).map(service => service)
     }
 
     get handler() {
-        const _router = Router()
+        const _router = Router({ mergeParams: true })
+        const { withAuthentication } = this.options
+        const requestValidator = createRequestHeaderValidator({ apiVersion: API_VERSION, withAuthentication })
+
         _router
             .use(json())
+            .get("/v2/catalog", this.catalog)
             /* ------------- PROVISION ----------------------------------------------------*/
-            .get("/v2/catalog", this._catalog)
-            .put("/v2/service_instances/:instance_id", checkRequest, this._provision)
-            .delete("/v2/service_instances/:instance_id", checkRequest, this._deprovision)
-            .get("/v2/service_instances/:instance_id", this._fetchInstance)
-            .get("/v2/service_instances/:instance_id/last_operation", this._getInstanceLastOperation)
-            /* ------------- BINDING -----------------------------------------------------*/
-            .put("/v2/service_instances/:instance_id/service_bindings/:binding_id", this._bindInstance)
-            .delete("/v2/service_instances/:instance_id/service_bindings/:binding_id", this._unbindInstance)
-            .get("/v2/service_instances/:instance_id/service_bindings/:binding_id/last_operation", this._getBindingLastOperation)
+            .put("/v2/service_instances/:instance_id", requestValidator, this.provision) 
 
         return _router
     }
@@ -92,123 +93,177 @@ export class OsbApiBroker {
     /* -----------------------------------------------------------------------------------------------
                 API ROUTES
     ----------------------------------------------------------------------------------------------- */
-    private _catalog = (request: Request, response: Response<OsbServiceCatalog>) => {
-        const result: ResponseEntity<OsbServiceCatalog> = {
-            status: 200,
-            data: { services: Array.from(this._managedService.values()).map(service => service.configuration) }
+    /**
+    * The first endpoint that a Platform will interact with on the Service Broker is the service catalog (/v2/catalog). 
+    * This endpoint returns a list of all services available on the Service Broker. Platforms query this endpoint from all Service Brokers in order to present an aggregated user-facing catalog.
+    * @link https://github.com/openservicebrokerapi/servicebroker/blob/v2.17/spec.md#catalog-management
+    */
+    private get catalog() {
+        return (request: Request, response: Response<OsbServiceCatalog>) => {
+                const result: ResponseEntity<OsbServiceCatalog> = {
+                    status: 200,
+                    data: { services: Array.from(this._managedService.values()).map(service => service.configuration) }
+                }
+                response.status(result.status).json(result.data)
         }
-        response.status(result.status).json(result.data)
     }
 
-    private _provision = async (request: Request<ProvisionParam, any, CreateProvisioning, AsyncRequest>, response: Response<Provision | BrokerErrorJson>) => {
 
-        let result: ResponseEntity<Provision | BrokerErrorJson> = {
-            status: 200,
-            data: {}
-        }
+    /* -----------------------------------------------------------------------------------------------
+              API MIDDLEWARES / HANDLERS
+  ----------------------------------------------------------------------------------------------- */
+    /**
+     * When the Service Broker receives a provision request from the Platform, it MUST take whatever action is necessary to create a new resource. 
+     * What provisioning represents varies by Service Offering and Service Plan, although there are several common use cases. 
+     * @returns 
+     */
+    private get provision() {
+        return async (request: Request<ProvisionParam, any, CreateProvisioning, AsyncRequest>, response: Response<Provision | BrokerErrorJson>) => {
+            let result: ResponseEntity<Provision | BrokerErrorJson> = {
+                status: 200,
+                data: {}
+            }
+            try {
+                result.data = await this.getDedicatedService(request.body.service_id)
+                    .provision({ ...request.params, ...request.body, ...request.query })
 
-        try {
-            result.data = await this.getDedicatedService(request.body.service_id)
-                .provision({ ...request.params, ...request.body, ...request.query })
+                result.status = (result.data.operation && result.data.operation.length > 0) ? 202 : 201
 
-            result.status = (result.data.operation && result.data.operation.length > 0) ? 202 : 201
+            } catch (error) {
 
-        } catch (error) {
+                result = {
+                    data: parseError(error),
+                    status: 400
+                }
 
-            result = {
-                data: parseError(error),
-                status: 400
             }
 
+            response.status(result.status).json(result.data)
         }
-
-        response.status(result.status).json(result.data)
     }
 
-    private _deprovision = async (request: Request<ProvisionParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response<{} | BrokerErrorJson>) => {
-        try {
+    /**
+     * When a Service Broker receives a deprovision request from a Platform, it MUST delete any resources it created during the provision. 
+     * Usually this means that all resources are immediately reclaimed for future provisions.
+     * Platforms MUST delete all Service Bindings for a Service Instance prior to attempting to deprovision the Service Instance. 
+     * This specification does not specify what a Service Broker is to do if it receives a deprovision request while there are still Service Bindings associated with it.
+     */
+    private get deprovision() {
+        return async (request: Request<ProvisionParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response<{} | BrokerErrorJson>) => {
+            try {
+                const { params, query } = request
+                const service = this.getDedicatedService(query.service_id)
+                await service.deprovision({ ...params, ...query })
+                response.json({})
+            } catch (error) {
+                response.status(400).json(parseError(error))
+            }
+        }
+    }
+
+    /**
+     * If "instances_retrievable" :true is declared for a Service Offering in the Catalog endpoint, 
+     * Service Brokers MUST support this endpoint for all Service Plans of the Service Offering and this endpoint MUST be available immediately after the Polling Last Operation for Service Instances endpoint returns "state": "succeeded" for a Provisioning operation. 
+     * Otherwise, Platforms SHOULD NOT attempt to call this endpoint under any circumstances.
+     */
+    private get fetchServiceInstance() {
+        return async (request: Request<ProvisionParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response<Provision | BrokerErrorJson>) => {
+            try {
+                const { params, query } = request
+                const service = this.getDedicatedService(query.service_id)
+
+                if (!service.configuration.instances_retrievable) throw new BrokerError("UnsupportedRequest", `Instance is not retrievable`)
+                response.status(200).json(await service.fetchInstance({ ...params, ...query }))
+
+            } catch (error) {
+                response.status(400).json(parseError(error))
+            }
+        }
+    }
+
+    /**
+     * When a Service Broker returns status code 202 Accepted for Provision, Update, or Deprovision, 
+     * the Platform will begin polling the /v2/service_instances/:instance_id/last_operation endpoint to obtain the state of the last requested operation.
+     */
+    private get instanceLastOperation() {
+        return async (request: Request<ProvisionParam, any, any, OperationRequest & OsbServicePlanKey>, response: Response<Operation | BrokerErrorJson>) => {
+            try {
+                const { params, query } = request
+                response.status(200).json(await this.getDedicatedService(query.service_id).getInstanceLastOperation({ ...params, ...query }))
+            } catch (error) {
+                response.status(400).json(parseError(error))
+            }
+        }
+    }
+
+    private get bindInstance() {
+        return async (request: Request<BindingParam, any, CreateBinding, AsyncRequest>, response: Response) => {
+            const { body, params, query } = request
+            try {
+                const service = this.getDedicatedService(body.service_id)
+                const { bindable } = service.configuration
+
+                if(!bindable) throw new BrokerError("UnsupportedRequest", "Service could not be bound")
+
+                const result = await service.bindInstance({
+                    ...params,
+                    ...body,
+                    ...query
+                })
+                response.status(201).json(result)
+            } catch (error) {
+                response.status(400).json(parseError(error))
+            }
+        }
+    }
+
+    private get unbindInstance() {
+        return async (request: Request<BindingParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response) => {
             const { params, query } = request
-            const service = this.getDedicatedService(query.service_id)
-            await service.deprovision({ ...params, ...query })
-            response.json({})
-        } catch (error) {
-            response.status(400).json(parseError(error))
+            try {
+
+                const service = this.getDedicatedService(query.service_id)
+                await service.unbindInstance({
+                    ...params,
+                    ...query
+                })
+                response.status(200).json({})
+            } catch (error) {
+                response.status(400).json(parseError(error))
+            }
         }
     }
 
-    private _fetchInstance = async (request: Request<ProvisionParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response<Provision | BrokerErrorJson>) => {
-        try {
+    private get fetchBoundedInstance() {
+        return async (request: Request<BindingParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response) => {
             const { params, query } = request
-            const service = this.getDedicatedService(query.service_id)
-            response.status(200).json(await service.fetchInstance({ ...params, ...query }))
-        } catch (error) {
-            response.status(400).json(parseError(error))
+            try {
+
+                const service = this.getDedicatedService(query.service_id)
+                if (!service.configuration.bindings_retrievable) throw new BrokerError("UnsupportedRequest", `Binding is not retrievable`)
+
+
+                response.status(200).json(await service.fetchBinding({
+                    ...params,
+                    ...query
+                }))
+            } catch (error) {
+                response.status(400).json(parseError(error))
+            }
         }
     }
 
-    private _getInstanceLastOperation = async (request: Request<ProvisionParam, any, any, OperationRequest & OsbServicePlanKey>, response: Response<Operation | BrokerErrorJson>) => {
-        try {
-            const { params, query } = request
-            response.status(200).json(await this.getDedicatedService(query.service_id).getInstanceLastOperation({ ...params, ...query }))
-        } catch (error) {
-            response.status(400).json(parseError(error))
+    private get bindingLastOperation() {
+        return async (request: Request<BindingParam, any, any, OperationRequest & OsbServicePlanKey>, response: Response<Operation | BrokerErrorJson>) => {
+            try {
+                const { params, query } = request
+                response.status(200).json(await this.getDedicatedService(query.service_id).getBindingLastOperation({ ...params, ...query }))
+            } catch (error) {
+                response.status(400).json(parseError(error))
+            }
         }
     }
 
-    private _bindInstance = async (request: Request<BindingParam, any, CreateBinding, AsyncRequest>, response: Response) => {
-        const { body, params, query } = request
-
-
-        try {
-
-            const service = this.getDedicatedService(body.service_id)
-            const result = await service.bindInstance({
-                ...params,
-                ...body,
-                ...query
-            })
-            response.status(201).json(result)
-        } catch (error) {
-            response.status(400).json(parseError(error))
-        }
-    }
-
-    private _unbindInstance = async (request: Request<BindingParam, any, any, AsyncRequest & OsbServicePlanKey>, response: Response) => {
-        const { params, query } = request
-        try {
-
-            const service = this.getDedicatedService(query.service_id)
-            await service.unbindInstance({
-                ...params,
-                ...query
-            })
-            response.status(200).json({})
-        } catch (error) {
-            response.status(400).json(parseError(error))
-        }
-    }
-
-    private _getBindingLastOperation = async (request: Request<BindingParam, any, any, OperationRequest & OsbServicePlanKey>, response: Response<Operation | BrokerErrorJson>) => {
-        try {
-            const { params, query } = request
-            response.status(200).json(await this.getDedicatedService(query.service_id).getBindingLastOperation({ ...params, ...query }))
-        } catch (error) {
-            response.status(400).json(parseError(error))
-        }
-    }
-}
-
-
-
-
-
-function checkRequest(request: Request<any, any, any, any>, response: Response<BrokerErrorJson>, next: NextFunction) {
-    try {
-        // apiHeaderSchema.parse(request.headers)
-        next()
-    } catch (error) {
-        response.status(400).json(parseError(error))
-    }
 }
 
 
